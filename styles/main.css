@@ -1,6 +1,6 @@
 body {
     display: grid;
-    grid-template-columns: 60vw auto;
+    grid-template-columns: 50vw 25vw auto;
 }
 #structview {
     height: 70vh;
@@ -35,7 +35,7 @@ body {
 }
 #file-outputs {
 	grid-column-start: 1;
-	grid-column-end: 3;
+	grid-column-end: 4;
 }
 
 #file-outputs pre {
@@ -46,4 +46,13 @@ body {
 #controls {
 	grid-row-start: 1;
 	grid-row-end: 2;
+}
+#bondlist {
+	padding: 0.5em;
+	height: 70vh;
+	overflow: hidden;
+	grid-row-start: 1;
+	grid-row-end: 3;
+    grid-column-start: 3;
+	grid-column-end: 4;
 }

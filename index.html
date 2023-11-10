@@ -24,13 +24,22 @@
 <div id="beadlist">
     <ul id="bead-list"></ul>
 </div>
+<div id="bondlist">
+    <button id="guess-bonds" disabled>Reset and Guess bonds</button><br>
+    <button id="add-bonds" disabled>Add bonds</button>
+    <form id="add-bonds-form">
+        <input type="text" id="add-bond1" style="width:20%; height:5%" placeholder="name i">
+        <input type="text" id="add-bond2" style="width:20%; height:5%" placeholder="name j">
+    </form>
+    <ul id="bond-list"></ul>
+</div>
 <div id="file-outputs">
-    <button id='dl-ndx' class='dl'>Get the NDX file</button>
-    <pre id="ndx-output">NDX output</pre>
     <button id='dl-map' class='dl'>Get the MAP file</button>
     <pre id="map-output">MAP output</pre>
     <button id='dl-gro' class='dl'>Get the GRO file</button>
     <pre id="gro-output">GRO output</pre>
+    <button id='dl-ndx' class='dl'>Get the NDX file</button>
+    <pre id="ndx-output">NDX output</pre>
 </div>
 </body>
 

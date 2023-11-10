@@ -1,6 +1,8 @@
 class Bead {
 	constructor () {
 		this._name = null;
+		this._type = null;
+		this._charge = null;
 		this.atoms = [];
 	}
 
@@ -44,6 +46,22 @@ class Bead {
 		return this._name;
 	}
 
+	set type(type) {
+		this._type = type;
+	}
+
+	get type() {
+		return this._type;
+	}
+
+	set charge(charge) {
+		this._charge = charge;
+	}
+
+	get charge() {
+		return this._charge;
+	}
+
 	get resname() {
 	    if (this.atoms.length < 1) {
 	        return 'UNK';
@@ -80,13 +98,16 @@ class BeadCollection {
         this._beads = [];
         this._current = null;
         this._largestIndex = -1;
+        this._bonds = [];
         this.newBead();
     }
 
     newBead () {
         let bead = new Bead();
         this._largestIndex += 1;
-        bead.name = 'B' + this._largestIndex;
+        bead.name = 'name' + this._largestIndex;
+        bead.type = 'type' + this._largestIndex;
+        bead.charge = '0.0';
         this._beads.push(bead);
         this._current = bead;
         return bead;
@@ -96,12 +117,20 @@ class BeadCollection {
         this._beads.splice(index, 1);
     }
 
+    removeBond(index) {
+        this._bonds.splice(index, 1);
+    }
+
     get currentBead() {
         return this._current;
     }
 
     get beads() {
         return this._beads;
+    }
+
+    get bonds() {
+        return this._bonds;
     }
 
     selectBead(index) {
@@ -117,6 +146,30 @@ class BeadCollection {
         }
         return count;
     }
+
+    addBonds(b1, b2) {
+        this._bonds.push([b1, b2]);
+    }
+
+    guessBonds() {
+        let r;
+        let rcut = 4.5;
+        let bonds = [];
+        let bond;
+        if (this.beads.length > 1) {
+            for (let i = 0; i < this.beads.length-1; ++i) {
+                for (let j = i+1; j < this.beads.length; ++j) {
+                    r = distBeads(this.beads[i], this.beads[j]);  
+                    if (r < rcut) {
+                        bond = [this.beads[i].name, this.beads[j].name];
+                        bonds.push(bond);
+                    }
+                }
+            }
+        }
+        this._bonds = bonds;
+    }
+
 }
 
 
@@ -130,12 +183,18 @@ class Visualization {
         let toggleCG = document.getElementById('toggle-cg');
         toggleCG.onclick = (event) => this.onToggleCG(event);
         toggleCG.disabled = false;
-        document.getElementById('dl-ndx').onclick = (event) => {
-            download('cgbuilder.ndx', generateNDX(this.collection))}
+        let doGuessBonds = document.getElementById('guess-bonds');
+        doGuessBonds.onclick = (event) => this.onDoGuessBonds(event);
+        doGuessBonds.disabled = false;
+        let doAddBonds = document.getElementById('add-bonds');
+        doAddBonds.onclick = (event) => this.onDoAddBonds(event);
+        doAddBonds.disabled = false;
         document.getElementById('dl-map').onclick = (event) => {
-            download('cgbuilder.map', generateMap(this.collection))}
+            download('cgbuilder.json', generateMap(this.collection))}
         document.getElementById('dl-gro').onclick = (event) => {
             download('cgbuilder.gro', generateGRO(this.collection))}
+        document.getElementById('dl-ndx').onclick = (event) => {
+            download('cgbuilder.ndx', generateNDX(this.collection))}
     }
 
 	get currentBead() {
@@ -167,6 +226,52 @@ class Visualization {
             button.disabled = false;
             button.onclick = (event) => this.onToggleAALabels(event);
         }
+    }
+
+    clearGuessBonds() {
+        let list = document.getElementById('bond-list');
+        while (list.lastChild) {
+            list.removeChild(list.lastChild);
+        }
+    }
+
+    createGuessBonds() {
+        let textNode;
+        let list = document.getElementById("bond-list");
+        let item;
+        for (const bond of this.collection.bonds) {
+            let line = bond[0] + "--" + bond[1] + " ";
+            item = document.createElement("li");
+            textNode = document.createTextNode(line);
+            item.appendChild(textNode);
+
+            let removeNode = document.createElement("button");
+            textNode = document.createTextNode("X");
+            removeNode.appendChild(textNode);
+            removeNode.onclick = (event) => this.onBondRemove(event);
+            item.appendChild(removeNode);
+
+            item.classList.add("bond-view");
+            list.appendChild(item);
+        }
+    }
+
+    onDoAddBonds(event) {
+        let formElement = document.getElementById("add-bonds-form");
+        let inputBond1 = document.getElementById("add-bond1").value;
+        let inputBond2 = document.getElementById("add-bond2").value;
+        this.collection.addBonds(inputBond1, inputBond2);
+        formElement.reset();
+        this.clearGuessBonds();
+        this.createGuessBonds();
+        this.updateMap();
+    }
+
+    onDoGuessBonds(event) {
+        this.clearGuessBonds();
+        this.collection.guessBonds();
+        this.createGuessBonds();
+        this.updateMap();
     }
 
     onToggleCG(event) {
@@ -204,7 +309,9 @@ class Visualization {
 	}
 
 	onBeadSelected(event) {
-	    if (! event.target.classList.contains('bead-name')) {
+	    if (! event.target.classList.contains('bead-name') && 
+            ! event.target.classList.contains('bead-type') &&
+            ! event.target.classList.contains('bead-charge')) {
             let realTarget = findParentWithClass(event.target, "bead-view");
             let nodes = document.getElementById("bead-list").childNodes;
             let index = 0;
@@ -217,6 +324,26 @@ class Visualization {
             this.updateSelection();
         }
 	}
+
+	onBondRemove(event) {
+        let realTarget = findParentWithClass(event.target, "bond-view");
+        let nodes = document.getElementById("bond-list").childNodes;
+        let index = 0;
+        let selected = -1;
+        for (const child of nodes) {
+            if (child === realTarget) {
+                selected = index;
+                break;
+            }
+            index += 1;
+        }
+        if (selected >= 0) {
+            this.collection.removeBond(selected);
+        }
+        this.clearGuessBonds();
+        this.createGuessBonds();
+        this.updateMap();
+    }
 
 	onBeadRemove(event) {
         let realTarget = findParentWithClass(event.target, "bead-view");
@@ -250,6 +377,32 @@ class Visualization {
         for (const child of nodes) {
             if (child === realTarget) {
                 this.collection.beads[index].name = event.target.value;
+            }
+            index += 1;
+        }
+        this.updateName();
+    }
+
+    onTypeChange(event) {
+        let realTarget = findParentWithClass(event.target, "bead-view");
+        let nodes = document.getElementById("bead-list").childNodes;
+        let index = 0;
+        for (const child of nodes) {
+            if (child === realTarget) {
+                this.collection.beads[index].type = event.target.value;
+            }
+            index += 1;
+        }
+        this.updateName();
+    }
+
+    onChargeChange(event) {
+        let realTarget = findParentWithClass(event.target, "bead-view");
+        let nodes = document.getElementById("bead-list").childNodes;
+        let index = 0;
+        for (const child of nodes) {
+            if (child === realTarget) {
+                this.collection.beads[index].charge = event.target.value;
             }
             index += 1;
         }
@@ -298,15 +451,37 @@ class Visualization {
         item.appendChild(removeNode);
 
         // Name entry
-        let formNode = document.createElement("form");
-        formNode.onsubmit = function() {return false};  // Prevent reload on "submission"
+        let formNameNode = document.createElement("form");
+        formNameNode.onsubmit = function() {return false};  // Prevent reload on "submission"
         let nameNode = document.createElement("input");
         nameNode.setAttribute("type", "text");
         nameNode.setAttribute("value", bead.name);
         nameNode.classList.add("bead-name");
         nameNode.oninput = (event) => this.onNameChange(event);
-        formNode.appendChild(nameNode);
-        item.appendChild(formNode);
+        formNameNode.appendChild(nameNode);
+        item.appendChild(formNameNode);
+
+        // Type entry
+        let formTypeNode = document.createElement("form");
+        formTypeNode.onsubmit = function() {return false};  // Prevent reload on "submission"
+        let typeNode = document.createElement("input");
+        typeNode.setAttribute("type", "text");
+        typeNode.setAttribute("value", bead.type);
+        typeNode.classList.add("bead-type");
+        typeNode.oninput = (event) => this.onTypeChange(event);
+        formTypeNode.appendChild(typeNode);
+        item.appendChild(formTypeNode);
+
+        // Charge entry
+        let formChargeNode = document.createElement("form");
+        formChargeNode.onsubmit = function() {return false};  // Prevent reload on "submission"
+        let chargeNode = document.createElement("input");
+        chargeNode.setAttribute("type", "text");
+        chargeNode.setAttribute("value", bead.charge);
+        chargeNode.classList.add("bead-charge");
+        chargeNode.oninput = (event) => this.onChargeChange(event);
+        formChargeNode.appendChild(chargeNode);
+        item.appendChild(formChargeNode);
 
         // Atom list
         let nameList = document.createElement("ul");
@@ -350,6 +525,7 @@ class Visualization {
             list.removeChild(list.lastChild);
         }
     }
+
 
     updateNDX() {
         let displayNode = document.getElementById('ndx-output');
@@ -419,13 +595,17 @@ function generateNDX(collection) {
 
 
 function generateMap(collection) {
-    let output = "[ to ]\nmartini\n\n[ martini ]\n";
+    let output = "{\n \"topo\": {\n";
     let atomToBeads = {};
     let atoms = [];
     let atomname;
     let index;
+    let init = true;
     for (const bead of collection.beads) {
-        output += bead.name + " ";
+        if (init) {
+            output += "    " + "\"" + bead.resname + "\": {";
+            init = false;
+        }
         for (const atom of bead.atoms) {
             atomname = atom.atomname;
             if (!atomToBeads[atomname]) {
@@ -435,23 +615,95 @@ function generateMap(collection) {
             atomToBeads[atomname].push(bead.name);
         }
     }
-    output += "\n\n";
-
-    output += "[ atoms ]\n";
-    index = 0;
-    atoms.sort(function(a, b) {return a.index - b.index});
-    for (const atom of atoms) {
-        index += 1;
-        output += index + "\t" + atom.atomname;
-        for (const bead of atomToBeads[atom.atomname]) {
-            output += "\t" + bead;
-        }
-        output += "\n";
+    output += "\n";
+    output += "       " + "\"name\": [";
+    for (const bead of collection.beads) {
+        output += "\"" + bead.name + "\", ";
     }
+    output = output.slice(0, -2);
+    output += "],\n";
+    output += "       " + "\"type\": [";
+    for (const bead of collection.beads) {
+        output += "\"" + bead.type + "\", ";
+    }
+    output = output.slice(0, -2);
+    output += "],\n";
+    output += "       " + "\"map\": [\n";
+    for (const bead of collection.beads){
+        output += "           [";
+        bead.atoms.sort(function(a, b) {return a.index - b.index});
+        for (const atom of bead.atoms) {
+            output += "\"" + atom.atomname + "\", ";
+        }
+        if (bead.atoms.length > 0) {output = output.slice(0, -2);}
+        output += "],\n";
+    }
+    output = output.slice(0, -2);
+    output += "\n";
+    output += "       ],\n";
+    output += "       " + "\"charge\": [";
+    for (const bead of collection.beads) {
+        output += bead.charge + ", ";
+    }
+    output = output.slice(0, -2);
+    output += "],\n";
+    output += "       " + "\"mass\": [";
+    for (const bead of collection.beads) {
+        mass = calculateMass(bead)
+        if (mass) { output += String(mass).substring(0,7) + ", ";}
+        else { output += "None" + ", ";}
+    }
+    output = output.slice(0, -2);
+    output += "],\n";
+    
+    output += "       " + "\"bonds\": [\n";
+    if (collection.bonds.length > 0) {
+        for (const bond of collection.bonds) {
+            output += "           [\"" + bond[0] + "\", \"" + bond[1] + "\"],\n";
+        }
+        output = output.slice(0, -2);
+        output += "\n";
+    } else {
+            output += "           [\"none\"]\n";
+    }
+    output += "       ],\n";
+    if (collection.bonds.length > 1) {
+        output += "       " + "\"angles\": [\"auto\"]\n";
+    } else {
+        output += "       " + "\"angles\": [\"none\"]\n";
+    }
+    output += "    }\n }\n}";
 
     return output;
 }
 
+function distBeads(b1, b2) {
+    let c1 = b1.center;
+    let c2 = b2.center;
+    let d2 = 0.0;
+    d2 += (c1.x - c2.x)*(c1.x - c2.x);
+    d2 += (c1.y - c2.y)*(c1.y - c2.y);
+    d2 += (c1.z - c2.z)*(c1.z - c2.z);
+    return Math.sqrt(d2);
+}
+
+function calculateMass(bead) {
+    let total = 0.0;
+    let amass;
+    for (const atom of bead.atoms) {
+        if (atom.atomname.substring(0,1) == "H") {amass = 1.0080;}
+        else if (atom.atomname.substring(0,1) == "B") {amass = 10.8115;}
+        else if (atom.atomname.substring(0,1) == "C") {amass = 12.0111;}
+        else if (atom.atomname.substring(0,1) == "N") {amass = 14.0067;}
+        else if (atom.atomname.substring(0,1) == "O") {amass = 15.9994;}
+        else if (atom.atomname.substring(0,1) == "F") {amass = 18.9984;}
+        else if (atom.atomname.substring(0,1) == "P") {amass = 30.9737;}
+        else if (atom.atomname.substring(0,1) == "S") {amass = 32.0666;}
+        else {return 0;}
+        total += amass;
+    }
+    return total;
+}
 
 function generateGRO(collection) {
     let resid = "    0";
